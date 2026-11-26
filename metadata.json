@@ -1,0 +1,8 @@
+{
+  "name": "FloréaKas",
+  "description": "Sistem manajemen keuangan bisnis jasa pembuatan buket dan hantaran dengan pelacakan pesanan, pemasukan, pengeluaran, modal produksi, stok bahan, dan invoice.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

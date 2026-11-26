@@ -1,0 +1,187 @@
+/**
+ * Security Verification Suite for FloréaKas Firestore Rules
+ * Verifies the "Dirty Dozen" adversarial payloads against Firestore security invariants.
+ */
+
+export interface DirtyDozenTestCase {
+  id: number;
+  name: string;
+  collectionPath: string;
+  operation: 'create' | 'update' | 'get' | 'list' | 'delete';
+  authUid: string | null;
+  emailVerified: boolean;
+  payload?: Record<string, unknown>;
+  expectedResult: 'PERMISSION_DENIED';
+  enforcedByPillar: string;
+}
+
+export const DIRTY_DOZEN_TESTS: DirtyDozenTestCase[] = [
+  {
+    id: 1,
+    name: 'Identity Spoofing on Cross-User Path',
+    collectionPath: '/users/userB/orders/ord-1',
+    operation: 'create',
+    authUid: 'userA',
+    emailVerified: true,
+    payload: { ownerId: 'userB', productName: 'Buket Mawar' },
+    expectedResult: 'PERMISSION_DENIED',
+    enforcedByPillar: 'Pillar 1 & 3: isOwner(userId)',
+  },
+  {
+    id: 2,
+    name: 'OwnerId Hijack in Payload',
+    collectionPath: '/users/userA/customers/cust-1',
+    operation: 'create',
+    authUid: 'userA',
+    emailVerified: true,
+    payload: { ownerId: 'userB', name: 'Sinta', phone: '08123456789', segment: 'VIP' },
+    expectedResult: 'PERMISSION_DENIED',
+    enforcedByPillar: 'Pillar 2: Identity Integrity',
+  },
+  {
+    id: 3,
+    name: 'Shadow Field Injection',
+    collectionPath: '/users/userA/materials/mat-1',
+    operation: 'create',
+    authUid: 'userA',
+    emailVerified: true,
+    payload: {
+      ownerId: 'userA',
+      name: 'Mawar Merah',
+      category: 'Bunga Segar',
+      unit: 'tangkai',
+      stock: 50,
+      minStock: 10,
+      unitCost: 8000,
+      isVerified: true,
+    },
+    expectedResult: 'PERMISSION_DENIED',
+    enforcedByPillar: 'Pillar 2: Strict keys().hasOnly()',
+  },
+  {
+    id: 4,
+    name: 'Unverified Email Bypass',
+    collectionPath: '/users/userA/transactions/tx-1',
+    operation: 'create',
+    authUid: 'userA',
+    emailVerified: false,
+    payload: {
+      ownerId: 'userA',
+      type: 'pemasukan',
+      title: 'Penjualan',
+      category: 'Buket Bunga',
+      amount: 250000,
+      date: '2026-11-25',
+      paymentMethod: 'QRIS',
+    },
+    expectedResult: 'PERMISSION_DENIED',
+    enforcedByPillar: 'Verified User Gate',
+  },
+  {
+    id: 5,
+    name: 'Client Timestamp Forgery',
+    collectionPath: '/users/userA/transactions/tx-2',
+    operation: 'create',
+    authUid: 'userA',
+    emailVerified: true,
+    payload: {
+      ownerId: 'userA',
+      type: 'pengeluaran',
+      title: 'Beli Pita',
+      category: 'Pita & Aksesori',
+      amount: 75000,
+      date: '2026-11-25',
+      paymentMethod: 'Tunai',
+      createdAt: '2020-01-01T00:00:00Z',
+    },
+    expectedResult: 'PERMISSION_DENIED',
+    enforcedByPillar: 'Temporal Integrity (request.time)',
+  },
+  {
+    id: 6,
+    name: 'Immutable Field Mutation',
+    collectionPath: '/users/userA/orders/ord-1',
+    operation: 'update',
+    authUid: 'userA',
+    emailVerified: true,
+    payload: { ownerId: 'userB', createdAt: '2026-01-01T00:00:00Z' },
+    expectedResult: 'PERMISSION_DENIED',
+    enforcedByPillar: 'Immortal Field Rule & affectedKeys().hasOnly()',
+  },
+  {
+    id: 7,
+    name: 'ID Poisoning (Invalid Doc ID)',
+    collectionPath: '/users/userA/customers/invalid$id!with*badchars',
+    operation: 'create',
+    authUid: 'userA',
+    emailVerified: true,
+    payload: { ownerId: 'userA', name: 'Test', phone: '08111', segment: 'Reguler' },
+    expectedResult: 'PERMISSION_DENIED',
+    enforcedByPillar: 'Pillar 3: isValidId()',
+  },
+  {
+    id: 8,
+    name: 'Negative Amount Financial Tampering',
+    collectionPath: '/users/userA/transactions/tx-3',
+    operation: 'create',
+    authUid: 'userA',
+    emailVerified: true,
+    payload: {
+      ownerId: 'userA',
+      type: 'pemasukan',
+      title: 'Refund Palsu',
+      category: 'Penjualan',
+      amount: -500000,
+      date: '2026-11-25',
+      paymentMethod: 'Transfer Bank',
+    },
+    expectedResult: 'PERMISSION_DENIED',
+    enforcedByPillar: 'Pillar 2: Numeric Range Validation',
+  },
+  {
+    id: 9,
+    name: 'Type Poisoning on Update',
+    collectionPath: '/users/userA/orders/ord-1',
+    operation: 'update',
+    authUid: 'userA',
+    emailVerified: true,
+    payload: { totalAmount: 'invalid-string' },
+    expectedResult: 'PERMISSION_DENIED',
+    enforcedByPillar: 'Pillar 2: Type Safety in Update Block',
+  },
+  {
+    id: 10,
+    name: 'Orphaned Order Creation',
+    collectionPath: '/users/userA/orders/ord-orphan',
+    operation: 'create',
+    authUid: 'userA',
+    emailVerified: true,
+    payload: {
+      ownerId: 'userA',
+      customerId: 'non-existent-customer',
+    },
+    expectedResult: 'PERMISSION_DENIED',
+    enforcedByPillar: 'Global Consistency Invariant (existsAfter)',
+  },
+  {
+    id: 11,
+    name: 'Terminal State Violation',
+    collectionPath: '/users/userA/orders/ord-cancelled',
+    operation: 'update',
+    authUid: 'userA',
+    emailVerified: true,
+    payload: { orderStatus: 'Diproses' },
+    expectedResult: 'PERMISSION_DENIED',
+    enforcedByPillar: 'Terminal State Locking',
+  },
+  {
+    id: 12,
+    name: 'Cross-Tenant PII List Scraping',
+    collectionPath: '/users/userB/customers',
+    operation: 'list',
+    authUid: 'userA',
+    emailVerified: true,
+    expectedResult: 'PERMISSION_DENIED',
+    enforcedByPillar: 'Pillar 6 & 8: PII Isolation & Query Enforcer',
+  },
+];

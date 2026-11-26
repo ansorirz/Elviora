@@ -1,0 +1,477 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Safety Net (Default Deny)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Reusable Hardened Global Helpers ---
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email == 'ansori20030511@gmail.com' ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    function isValidDateStr(d) {
+      return d is string && d.size() == 10 && d.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+    }
+
+    function isNonNegNumber(n) {
+      return (n is int || n is float) && n >= 0;
+    }
+
+    function isOptStr(data, key, maxLen) {
+      return !(key in data) || (data[key] is string && data[key].size() <= maxLen);
+    }
+
+    // --- Entity Validation Blueprints ---
+    function isValidStoreSettings(data, userId) {
+      return data.keys().hasAll(['ownerId', 'storeName', 'ownerName', 'taxRate', 'invoicePrefix', 'monthlyTarget', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['ownerId', 'storeName', 'ownerName', 'phone', 'address', 'taxRate', 'invoicePrefix', 'bankName', 'bankAccount', 'bankHolder', 'monthlyTarget', 'profilePhotoUrl', 'storeLogoUrl', 'createdAt', 'updatedAt'])
+        && data.ownerId == userId
+        && isValidId(data.ownerId)
+        && data.storeName is string && data.storeName.size() >= 1 && data.storeName.size() <= 120
+        && data.ownerName is string && data.ownerName.size() >= 1 && data.ownerName.size() <= 120
+        && isOptStr(data, 'phone', 40)
+        && isOptStr(data, 'address', 250)
+        && isNonNegNumber(data.taxRate) && data.taxRate <= 100
+        && data.invoicePrefix is string && data.invoicePrefix.size() >= 1 && data.invoicePrefix.size() <= 20
+        && isOptStr(data, 'bankName', 60)
+        && isOptStr(data, 'bankAccount', 60)
+        && isOptStr(data, 'bankHolder', 120)
+        && isNonNegNumber(data.monthlyTarget)
+        && isOptStr(data, 'profilePhotoUrl', 80000)
+        && isOptStr(data, 'storeLogoUrl', 80000)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidCustomer(data, userId) {
+      return data.keys().hasAll(['ownerId', 'name', 'phone', 'segment', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['ownerId', 'name', 'phone', 'email', 'address', 'segment', 'notes', 'createdAt', 'updatedAt'])
+        && data.ownerId == userId
+        && isValidId(data.ownerId)
+        && data.name is string && data.name.size() >= 1 && data.name.size() <= 120
+        && data.phone is string && data.phone.size() >= 3 && data.phone.size() <= 40
+        && isOptStr(data, 'email', 120)
+        && isOptStr(data, 'address', 250)
+        && data.segment in ['Reguler', 'VIP', 'Korporat', 'Reseller']
+        && isOptStr(data, 'notes', 500)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidOrder(data, userId) {
+      return data.keys().hasAll([
+          'ownerId', 'invoiceNumber', 'customerId', 'customerName', 'productName',
+          'category', 'quantity', 'unitPrice', 'productionCost', 'totalAmount',
+          'paidAmount', 'paymentStatus', 'orderStatus', 'orderDate', 'dueDate',
+          'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerId', 'invoiceNumber', 'customerId', 'customerName', 'productName',
+          'category', 'quantity', 'unitPrice', 'productionCost', 'totalAmount',
+          'paidAmount', 'paymentStatus', 'orderStatus', 'orderDate', 'dueDate',
+          'notes', 'imageKey', 'discountType', 'discountValue', 'discountAmount',
+          'createdAt', 'updatedAt'
+        ])
+        && data.ownerId == userId
+        && isValidId(data.ownerId)
+        && data.invoiceNumber is string && data.invoiceNumber.size() >= 1 && data.invoiceNumber.size() <= 50
+        && isValidId(data.customerId)
+        && data.customerName is string && data.customerName.size() >= 1 && data.customerName.size() <= 120
+        && data.productName is string && data.productName.size() >= 1 && data.productName.size() <= 160
+        && data.category in ['Buket Bunga', 'Hantaran Lamaran', 'Buket Uang & Snack', 'Hampers Musiman', 'Dekorasi & Custom']
+        && (data.quantity is int || data.quantity is float) && data.quantity >= 1
+        && isNonNegNumber(data.unitPrice)
+        && isNonNegNumber(data.productionCost)
+        && isNonNegNumber(data.totalAmount)
+        && isNonNegNumber(data.paidAmount) && data.paidAmount <= data.totalAmount
+        && data.paymentStatus in ['Lunas', 'DP', 'Belum Bayar']
+        && data.orderStatus in ['Selesai', 'Diproses', 'Menunggu', 'Dibatalkan']
+        && isValidDateStr(data.orderDate)
+        && isValidDateStr(data.dueDate)
+        && isOptStr(data, 'notes', 500)
+        && isOptStr(data, 'imageKey', 60)
+        && (!('discountType' in data) || data.discountType in ['none', 'percent', 'fixed'])
+        && (!('discountValue' in data) || isNonNegNumber(data.discountValue))
+        && (!('discountAmount' in data) || isNonNegNumber(data.discountAmount))
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidTransaction(data, userId) {
+      return data.keys().hasAll(['ownerId', 'type', 'title', 'category', 'amount', 'date', 'paymentMethod', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['ownerId', 'type', 'title', 'category', 'amount', 'date', 'paymentMethod', 'orderId', 'notes', 'createdAt', 'updatedAt'])
+        && data.ownerId == userId
+        && isValidId(data.ownerId)
+        && data.type in ['pemasukan', 'pengeluaran']
+        && data.title is string && data.title.size() >= 1 && data.title.size() <= 160
+        && data.category is string && data.category.size() >= 1 && data.category.size() <= 80
+        && isNonNegNumber(data.amount)
+        && isValidDateStr(data.date)
+        && data.paymentMethod in ['Transfer Bank', 'QRIS', 'Tunai', 'E-Wallet']
+        && isOptStr(data, 'orderId', 128)
+        && isOptStr(data, 'notes', 500)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidMaterial(data, userId) {
+      return data.keys().hasAll(['ownerId', 'name', 'category', 'unit', 'stock', 'minStock', 'unitCost', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['ownerId', 'name', 'category', 'unit', 'stock', 'minStock', 'unitCost', 'supplier', 'createdAt', 'updatedAt'])
+        && data.ownerId == userId
+        && isValidId(data.ownerId)
+        && data.name is string && data.name.size() >= 1 && data.name.size() <= 140
+        && data.category in ['Bunga Segar', 'Bunga Kering', 'Kertas Wrapping', 'Pita & Aksesori', 'Box & Keranjang', 'Lainnya']
+        && data.unit is string && data.unit.size() >= 1 && data.unit.size() <= 30
+        && isNonNegNumber(data.stock)
+        && isNonNegNumber(data.minStock)
+        && isNonNegNumber(data.unitCost)
+        && isOptStr(data, 'supplier', 120)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidProductionModal(data, userId) {
+      return data.keys().hasAll(['ownerId', 'productName', 'category', 'materialCost', 'packagingCost', 'laborCost', 'overheadCost', 'totalHpp', 'sellingPrice', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['ownerId', 'productName', 'category', 'materialCost', 'packagingCost', 'laborCost', 'overheadCost', 'totalHpp', 'sellingPrice', 'notes', 'createdAt', 'updatedAt'])
+        && data.ownerId == userId
+        && isValidId(data.ownerId)
+        && data.productName is string && data.productName.size() >= 1 && data.productName.size() <= 160
+        && data.category in ['Buket Bunga', 'Hantaran Lamaran', 'Buket Uang & Snack', 'Hampers Musiman', 'Dekorasi & Custom']
+        && isNonNegNumber(data.materialCost)
+        && isNonNegNumber(data.packagingCost)
+        && isNonNegNumber(data.laborCost)
+        && isNonNegNumber(data.overheadCost)
+        && isNonNegNumber(data.totalHpp)
+        && isNonNegNumber(data.sellingPrice)
+        && isOptStr(data, 'notes', 500)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidNotification(data, userId) {
+      return data.keys().hasAll(['ownerId', 'title', 'message', 'type', 'isRead', 'date', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['ownerId', 'title', 'message', 'type', 'isRead', 'date', 'createdAt', 'updatedAt'])
+        && data.ownerId == userId
+        && isValidId(data.ownerId)
+        && data.title is string && data.title.size() >= 1 && data.title.size() <= 140
+        && data.message is string && data.message.size() >= 1 && data.message.size() <= 300
+        && data.type in ['pesanan', 'pembayaran', 'stok', 'sistem']
+        && data.isRead is bool
+        && isValidDateStr(data.date)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidGalleryImages(data) {
+      return !('galleryImages' in data) || (
+        data.galleryImages is list
+        && data.galleryImages.size() <= 5
+        && (data.galleryImages.size() < 1 || (data.galleryImages[0] is string && data.galleryImages[0].size() <= 80000))
+        && (data.galleryImages.size() < 2 || (data.galleryImages[1] is string && data.galleryImages[1].size() <= 80000))
+        && (data.galleryImages.size() < 3 || (data.galleryImages[2] is string && data.galleryImages[2].size() <= 80000))
+        && (data.galleryImages.size() < 4 || (data.galleryImages[3] is string && data.galleryImages[3].size() <= 80000))
+        && (data.galleryImages.size() < 5 || (data.galleryImages[4] is string && data.galleryImages[4].size() <= 80000))
+      );
+    }
+
+    function isValidCatalogProduct(data) {
+      return data.keys().hasAll([
+          'ownerId', 'title', 'category', 'price', 'rating',
+          'soldCount', 'isActive', 'isFeatured', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerId', 'title', 'category', 'description', 'price',
+          'originalPrice', 'badge', 'rating', 'soldCount', 'imageKey',
+          'imageUrl', 'galleryImages', 'isActive', 'isFeatured', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.ownerId)
+        && data.title is string && data.title.size() >= 1 && data.title.size() <= 160
+        && data.category in ['Buket Bunga', 'Hantaran Lamaran', 'Buket Uang & Snack', 'Hampers Musiman', 'Dekorasi & Custom']
+        && isOptStr(data, 'description', 500)
+        && isNonNegNumber(data.price)
+        && (!('originalPrice' in data) || isNonNegNumber(data.originalPrice))
+        && isOptStr(data, 'badge', 40)
+        && isNonNegNumber(data.rating) && data.rating <= 5
+        && isNonNegNumber(data.soldCount)
+        && isOptStr(data, 'imageKey', 60)
+        && isOptStr(data, 'imageUrl', 80000)
+        && isValidGalleryImages(data)
+        && data.isActive is bool
+        && data.isFeatured is bool
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidPublicStoreInfo(data) {
+      return data.keys().hasAll(['ownerId', 'storeName', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly([
+          'ownerId', 'storeName', 'tagline', 'storeLogoUrl',
+          'whatsappPhone', 'address', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.ownerId)
+        && data.storeName is string && data.storeName.size() >= 1 && data.storeName.size() <= 120
+        && isOptStr(data, 'tagline', 160)
+        && isOptStr(data, 'storeLogoUrl', 80000)
+        && isOptStr(data, 'whatsappPhone', 40)
+        && isOptStr(data, 'address', 250)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    // --- Collection Rules ---
+    match /admins/{adminId} {
+      allow get: if isSignedIn() && request.auth.uid == adminId;
+      allow list, write: if false;
+    }
+
+    match /catalogProducts/{productId} {
+      allow get: if isValidId(productId);
+      allow list: if existing().ownerId is string && existing().isActive is bool;
+      allow create: if isValidId(productId)
+        && isAdmin()
+        && isValidCatalogProduct(incoming())
+        && incoming().ownerId == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(productId)
+        && isAdmin()
+        && isValidCatalogProduct(incoming())
+        && incoming().ownerId == existing().ownerId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'title', 'category', 'description', 'price', 'originalPrice',
+          'badge', 'rating', 'soldCount', 'imageKey', 'imageUrl',
+          'galleryImages', 'isActive', 'isFeatured', 'updatedAt'
+        ]);
+      allow delete: if isValidId(productId) && isAdmin();
+    }
+
+    match /publicStore/{docId} {
+      allow get: if isValidId(docId);
+      allow list: if existing().ownerId is string && existing().storeName is string;
+      allow create: if isValidId(docId)
+        && isAdmin()
+        && isValidPublicStoreInfo(incoming())
+        && incoming().ownerId == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(docId)
+        && isAdmin()
+        && isValidPublicStoreInfo(incoming())
+        && incoming().ownerId == existing().ownerId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'storeName', 'tagline', 'storeLogoUrl', 'whatsappPhone', 'address', 'updatedAt'
+        ]);
+      allow delete: if isValidId(docId) && isAdmin();
+    }
+
+    match /users/{userId} {
+      match /settings/{settingId} {
+        allow get: if isValidId(userId) && isValidId(settingId) && (isOwner(userId) || isAdmin());
+        allow list: if isValidId(userId) && isOwner(userId) && existing().ownerId == request.auth.uid;
+        allow create: if isValidId(userId) && isValidId(settingId)
+          && isOwner(userId)
+          && isValidStoreSettings(incoming(), userId)
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time;
+        allow update: if isValidId(userId) && isValidId(settingId)
+          && isOwner(userId)
+          && isValidStoreSettings(incoming(), userId)
+          && incoming().ownerId == existing().ownerId
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && (
+            isAdmin() ||
+            incoming().diff(existing()).affectedKeys().hasOnly(['profilePhotoUrl', 'updatedAt']) ||
+            incoming().diff(existing()).affectedKeys().hasOnly(['storeLogoUrl', 'updatedAt']) ||
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'storeName', 'ownerName', 'phone', 'address', 'taxRate',
+              'invoicePrefix', 'bankName', 'bankAccount', 'bankHolder',
+              'monthlyTarget', 'profilePhotoUrl', 'storeLogoUrl', 'updatedAt'
+            ])
+          );
+        allow delete: if isValidId(userId) && isValidId(settingId) && (isOwner(userId) || isAdmin());
+      }
+
+      match /customers/{customerId} {
+        allow get: if isValidId(userId) && isValidId(customerId) && (isOwner(userId) || isAdmin());
+        allow list: if isValidId(userId) && isOwner(userId) && existing().ownerId == request.auth.uid;
+        allow create: if isValidId(userId) && isValidId(customerId)
+          && isOwner(userId)
+          && isValidCustomer(incoming(), userId)
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time;
+        allow update: if isValidId(userId) && isValidId(customerId)
+          && isOwner(userId)
+          && isValidCustomer(incoming(), userId)
+          && incoming().ownerId == existing().ownerId
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && (
+            isAdmin() ||
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'name', 'phone', 'email', 'address', 'segment', 'notes', 'updatedAt'
+            ])
+          );
+        allow delete: if isValidId(userId) && isValidId(customerId) && (isOwner(userId) || isAdmin());
+      }
+
+      match /orders/{orderId} {
+        allow get: if isValidId(userId) && isValidId(orderId) && (isOwner(userId) || isAdmin());
+        allow list: if isValidId(userId) && isOwner(userId) && existing().ownerId == request.auth.uid;
+        allow create: if isValidId(userId) && isValidId(orderId)
+          && isOwner(userId)
+          && isValidOrder(incoming(), userId)
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time
+          && existsAfter(/databases/$(database)/documents/users/$(userId)/customers/$(incoming().customerId));
+        allow update: if isValidId(userId) && isValidId(orderId)
+          && isOwner(userId)
+          && isValidOrder(incoming(), userId)
+          && incoming().ownerId == existing().ownerId
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && (
+            isAdmin() ||
+            (
+              existing().orderStatus != 'Dibatalkan'
+              && !(existing().orderStatus == 'Selesai' && existing().paymentStatus == 'Lunas')
+              && (
+                incoming().diff(existing()).affectedKeys().hasOnly(['paidAmount', 'paymentStatus', 'updatedAt']) ||
+                incoming().diff(existing()).affectedKeys().hasOnly(['orderStatus', 'updatedAt']) ||
+                incoming().diff(existing()).affectedKeys().hasOnly([
+                  'customerId', 'customerName', 'productName', 'category',
+                  'quantity', 'unitPrice', 'productionCost', 'totalAmount',
+                  'paidAmount', 'paymentStatus', 'orderStatus', 'orderDate',
+                  'dueDate', 'notes', 'imageKey',
+                  'discountType', 'discountValue', 'discountAmount', 'updatedAt'
+                ])
+              )
+            )
+          );
+        allow delete: if isValidId(userId) && isValidId(orderId) && (isOwner(userId) || isAdmin());
+      }
+
+      match /transactions/{transactionId} {
+        allow get: if isValidId(userId) && isValidId(transactionId) && (isOwner(userId) || isAdmin());
+        allow list: if isValidId(userId) && isOwner(userId) && existing().ownerId == request.auth.uid;
+        allow create: if isValidId(userId) && isValidId(transactionId)
+          && isOwner(userId)
+          && isValidTransaction(incoming(), userId)
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time;
+        allow update: if isValidId(userId) && isValidId(transactionId)
+          && isOwner(userId)
+          && isValidTransaction(incoming(), userId)
+          && incoming().ownerId == existing().ownerId
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && (
+            isAdmin() ||
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'type', 'title', 'category', 'amount', 'date', 'paymentMethod', 'orderId', 'notes', 'updatedAt'
+            ])
+          );
+        allow delete: if isValidId(userId) && isValidId(transactionId) && (isOwner(userId) || isAdmin());
+      }
+
+      match /materials/{materialId} {
+        allow get: if isValidId(userId) && isValidId(materialId) && (isOwner(userId) || isAdmin());
+        allow list: if isValidId(userId) && isOwner(userId) && existing().ownerId == request.auth.uid;
+        allow create: if isValidId(userId) && isValidId(materialId)
+          && isOwner(userId)
+          && isValidMaterial(incoming(), userId)
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time;
+        allow update: if isValidId(userId) && isValidId(materialId)
+          && isOwner(userId)
+          && isValidMaterial(incoming(), userId)
+          && incoming().ownerId == existing().ownerId
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && (
+            isAdmin() ||
+            incoming().diff(existing()).affectedKeys().hasOnly(['stock', 'updatedAt']) ||
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'name', 'category', 'unit', 'stock', 'minStock', 'unitCost', 'supplier', 'updatedAt'
+            ])
+          );
+        allow delete: if isValidId(userId) && isValidId(materialId) && (isOwner(userId) || isAdmin());
+      }
+
+      match /productionModals/{modalId} {
+        allow get: if isValidId(userId) && isValidId(modalId) && (isOwner(userId) || isAdmin());
+        allow list: if isValidId(userId) && isOwner(userId) && existing().ownerId == request.auth.uid;
+        allow create: if isValidId(userId) && isValidId(modalId)
+          && isOwner(userId)
+          && isValidProductionModal(incoming(), userId)
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time;
+        allow update: if isValidId(userId) && isValidId(modalId)
+          && isOwner(userId)
+          && isValidProductionModal(incoming(), userId)
+          && incoming().ownerId == existing().ownerId
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && (
+            isAdmin() ||
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'productName', 'category', 'materialCost', 'packagingCost', 'laborCost',
+              'overheadCost', 'totalHpp', 'sellingPrice', 'notes', 'updatedAt'
+            ])
+          );
+        allow delete: if isValidId(userId) && isValidId(modalId) && (isOwner(userId) || isAdmin());
+      }
+
+      match /notifications/{notificationId} {
+        allow get: if isValidId(userId) && isValidId(notificationId) && (isOwner(userId) || isAdmin());
+        allow list: if isValidId(userId) && isOwner(userId) && existing().ownerId == request.auth.uid;
+        allow create: if isValidId(userId) && isValidId(notificationId)
+          && isOwner(userId)
+          && isValidNotification(incoming(), userId)
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time;
+        allow update: if isValidId(userId) && isValidId(notificationId)
+          && isOwner(userId)
+          && isValidNotification(incoming(), userId)
+          && incoming().ownerId == existing().ownerId
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && (
+            isAdmin() ||
+            incoming().diff(existing()).affectedKeys().hasOnly(['isRead', 'updatedAt'])
+          );
+        allow delete: if isValidId(userId) && isValidId(notificationId) && (isOwner(userId) || isAdmin());
+      }
+    }
+  }
+}

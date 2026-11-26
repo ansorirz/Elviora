@@ -1,0 +1,229 @@
+{
+  "entities": {
+    "StoreSettings": {
+      "title": "StoreSettings",
+      "description": "Pengaturan profil toko buket dan hantaran, rekening bank, dan target keuangan.",
+      "type": "object",
+      "properties": {
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "storeName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "ownerName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "phone": { "type": "string", "maxLength": 40 },
+        "address": { "type": "string", "maxLength": 250 },
+        "taxRate": { "type": "number" },
+        "invoicePrefix": { "type": "string", "minLength": 1, "maxLength": 20 },
+        "bankName": { "type": "string", "maxLength": 60 },
+        "bankAccount": { "type": "string", "maxLength": 60 },
+        "bankHolder": { "type": "string", "maxLength": 120 },
+        "monthlyTarget": { "type": "number" },
+        "profilePhotoUrl": { "type": "string", "maxLength": 80000 },
+        "storeLogoUrl": { "type": "string", "maxLength": 80000 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ownerId", "storeName", "ownerName", "taxRate", "invoicePrefix", "monthlyTarget", "createdAt", "updatedAt"]
+    },
+    "Customer": {
+      "title": "Customer",
+      "description": "Data pelanggan jasa pembuatan buket dan hantaran.",
+      "type": "object",
+      "properties": {
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "phone": { "type": "string", "minLength": 3, "maxLength": 40 },
+        "email": { "type": "string", "maxLength": 120 },
+        "address": { "type": "string", "maxLength": 250 },
+        "segment": { "type": "string", "enum": ["Reguler", "VIP", "Korporat", "Reseller"] },
+        "notes": { "type": "string", "maxLength": 500 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ownerId", "name", "phone", "segment", "createdAt", "updatedAt"]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "Data pesanan buket dan hantaran beserta status pembayaran dan produksi.",
+      "type": "object",
+      "properties": {
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "invoiceNumber": { "type": "string", "minLength": 1, "maxLength": 50 },
+        "customerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "customerName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "productName": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "category": { "type": "string", "enum": ["Buket Bunga", "Hantaran Lamaran", "Buket Uang & Snack", "Hampers Musiman", "Dekorasi & Custom"] },
+        "quantity": { "type": "number" },
+        "unitPrice": { "type": "number" },
+        "productionCost": { "type": "number" },
+        "totalAmount": { "type": "number" },
+        "paidAmount": { "type": "number" },
+        "paymentStatus": { "type": "string", "enum": ["Lunas", "DP", "Belum Bayar"] },
+        "orderStatus": { "type": "string", "enum": ["Selesai", "Diproses", "Menunggu", "Dibatalkan"] },
+        "orderDate": { "type": "string", "minLength": 10, "maxLength": 10, "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+        "dueDate": { "type": "string", "minLength": 10, "maxLength": 10, "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+        "notes": { "type": "string", "maxLength": 500 },
+        "imageKey": { "type": "string", "maxLength": 60 },
+        "discountType": { "type": "string", "enum": ["none", "percent", "fixed"] },
+        "discountValue": { "type": "number" },
+        "discountAmount": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ownerId", "invoiceNumber", "customerId", "customerName", "productName", "category", "quantity", "unitPrice", "productionCost", "totalAmount", "paidAmount", "paymentStatus", "orderStatus", "orderDate", "dueDate", "createdAt", "updatedAt"]
+    },
+    "Transaction": {
+      "title": "Transaction",
+      "description": "Catatan pemasukan dan pengeluaran operasional bisnis.",
+      "type": "object",
+      "properties": {
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "type": { "type": "string", "enum": ["pemasukan", "pengeluaran"] },
+        "title": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "category": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "amount": { "type": "number" },
+        "date": { "type": "string", "minLength": 10, "maxLength": 10, "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+        "paymentMethod": { "type": "string", "enum": ["Transfer Bank", "QRIS", "Tunai", "E-Wallet"] },
+        "orderId": { "type": "string", "maxLength": 128 },
+        "notes": { "type": "string", "maxLength": 500 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ownerId", "type", "title", "category", "amount", "date", "paymentMethod", "createdAt", "updatedAt"]
+    },
+    "Material": {
+      "title": "Material",
+      "description": "Stok bahan baku pembuatan buket dan hantaran.",
+      "type": "object",
+      "properties": {
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 140 },
+        "category": { "type": "string", "enum": ["Bunga Segar", "Bunga Kering", "Kertas Wrapping", "Pita & Aksesori", "Box & Keranjang", "Lainnya"] },
+        "unit": { "type": "string", "minLength": 1, "maxLength": 30 },
+        "stock": { "type": "number" },
+        "minStock": { "type": "number" },
+        "unitCost": { "type": "number" },
+        "supplier": { "type": "string", "maxLength": 120 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ownerId", "name", "category", "unit", "stock", "minStock", "unitCost", "createdAt", "updatedAt"]
+    },
+    "ProductionModal": {
+      "title": "ProductionModal",
+      "description": "Kalkulasi modal produksi (HPP) dan margin keuntungan per produk.",
+      "type": "object",
+      "properties": {
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "productName": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "category": { "type": "string", "enum": ["Buket Bunga", "Hantaran Lamaran", "Buket Uang & Snack", "Hampers Musiman", "Dekorasi & Custom"] },
+        "materialCost": { "type": "number" },
+        "packagingCost": { "type": "number" },
+        "laborCost": { "type": "number" },
+        "overheadCost": { "type": "number" },
+        "totalHpp": { "type": "number" },
+        "sellingPrice": { "type": "number" },
+        "notes": { "type": "string", "maxLength": 500 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ownerId", "productName", "category", "materialCost", "packagingCost", "laborCost", "overheadCost", "totalHpp", "sellingPrice", "createdAt", "updatedAt"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "Notifikasi aktivitas bisnis, pengingat pengiriman, dan stok menipis.",
+      "type": "object",
+      "properties": {
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 140 },
+        "message": { "type": "string", "minLength": 1, "maxLength": 300 },
+        "type": { "type": "string", "enum": ["pesanan", "pembayaran", "stok", "sistem"] },
+        "isRead": { "type": "boolean" },
+        "date": { "type": "string", "minLength": 10, "maxLength": 10, "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ownerId", "title", "message", "type", "isRead", "date", "createdAt", "updatedAt"]
+    },
+    "CatalogProduct": {
+      "title": "CatalogProduct",
+      "description": "Produk buket, hantaran, dan hampers yang ditampilkan pada katalog beranda publik.",
+      "type": "object",
+      "properties": {
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "category": { "type": "string", "enum": ["Buket Bunga", "Hantaran Lamaran", "Buket Uang & Snack", "Hampers Musiman", "Dekorasi & Custom"] },
+        "description": { "type": "string", "maxLength": 500 },
+        "price": { "type": "number" },
+        "originalPrice": { "type": "number" },
+        "badge": { "type": "string", "maxLength": 40 },
+        "rating": { "type": "number" },
+        "soldCount": { "type": "number" },
+        "imageKey": { "type": "string", "maxLength": 60 },
+        "imageUrl": { "type": "string", "maxLength": 80000 },
+        "galleryImages": {
+          "type": "array",
+          "maxItems": 5,
+          "items": { "type": "string", "maxLength": 80000 }
+        },
+        "isActive": { "type": "boolean" },
+        "isFeatured": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ownerId", "title", "category", "price", "rating", "soldCount", "isActive", "isFeatured", "createdAt", "updatedAt"]
+    },
+    "PublicStoreInfo": {
+      "title": "PublicStoreInfo",
+      "description": "Identitas toko non-PII untuk tampilan katalog publik (nama toko, logo, WhatsApp layanan, alamat studio).",
+      "type": "object",
+      "properties": {
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "storeName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "tagline": { "type": "string", "maxLength": 160 },
+        "storeLogoUrl": { "type": "string", "maxLength": 80000 },
+        "whatsappPhone": { "type": "string", "maxLength": 40 },
+        "address": { "type": "string", "maxLength": 250 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ownerId", "storeName", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}/settings/{settingId}": {
+      "schema": { "$ref": "#/entities/StoreSettings" },
+      "description": "Store settings owned by authenticated user."
+    },
+    "/users/{userId}/customers/{customerId}": {
+      "schema": { "$ref": "#/entities/Customer" },
+      "description": "Private customer records owned by authenticated user."
+    },
+    "/users/{userId}/orders/{orderId}": {
+      "schema": { "$ref": "#/entities/Order" },
+      "description": "Bouquet and hamper orders owned by authenticated user."
+    },
+    "/users/{userId}/transactions/{transactionId}": {
+      "schema": { "$ref": "#/entities/Transaction" },
+      "description": "Income and expense ledger entries owned by authenticated user."
+    },
+    "/users/{userId}/materials/{materialId}": {
+      "schema": { "$ref": "#/entities/Material" },
+      "description": "Floral and packaging material inventory owned by authenticated user."
+    },
+    "/users/{userId}/productionModals/{modalId}": {
+      "schema": { "$ref": "#/entities/ProductionModal" },
+      "description": "Production HPP cost breakdowns owned by authenticated user."
+    },
+    "/users/{userId}/notifications/{notificationId}": {
+      "schema": { "$ref": "#/entities/Notification" },
+      "description": "User alerts and reminders."
+    },
+    "/catalogProducts/{productId}": {
+      "schema": { "$ref": "#/entities/CatalogProduct" },
+      "description": "Publicly readable storefront catalog items managed exclusively by Admin."
+    },
+    "/publicStore/{docId}": {
+      "schema": { "$ref": "#/entities/PublicStoreInfo" },
+      "description": "Publicly readable non-PII storefront branding and WhatsApp contact managed exclusively by Admin."
+    }
+  }
+}
